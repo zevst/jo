@@ -17,5 +17,4 @@ message kdf {
     int64 key_len = 3;
     int64 iter = 4;
     HashAlg alg = 5;
-    bytes hmac_key = 6;
 }

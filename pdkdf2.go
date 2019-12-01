@@ -2,7 +2,6 @@ package jo
 
 import (
 	"bytes"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -15,11 +14,10 @@ import (
 )
 
 const (
-	defaultHashFunc         = Kdf_SHA3_256
-	defaultSaltLen    int   = 64
-	defaultHmacKeyLen int   = 64
-	defaultKeyLen     int64 = 256
-	defaultIter       int64 = 4096
+	defaultHashFunc       = Kdf_SHA3_256
+	defaultSaltLen  int   = 64
+	defaultKeyLen   int64 = 256
+	defaultIter     int64 = 4096
 )
 
 type Option func(*Kdf)
@@ -49,10 +47,7 @@ func New(pass []byte, opts ...Option) ([]byte, error) {
 	if len(k.Salt) == 0 {
 		WithSaltLen(defaultSaltLen)(k)
 	}
-	if len(k.HmacKey) == 0 {
-		WithHmacKeyLen(defaultHmacKeyLen)(k)
-	}
-	k.Key = pbkdf2.Key(pass, k.Salt, int(k.Iter), int(k.KeyLen), hf(k.Alg, k.HmacKey))
+	k.Key = pbkdf2.Key(pass, k.Salt, int(k.Iter), int(k.KeyLen), hashMap[k.Alg])
 	return proto.Marshal(k)
 }
 
@@ -64,7 +59,7 @@ func CompareHashAndPassword(hash, pass []byte) error {
 	if err := proto.Unmarshal(hash, kdf); err != nil {
 		return err
 	}
-	key := pbkdf2.Key(pass, kdf.Salt, int(kdf.Iter), int(kdf.KeyLen), hf(kdf.Alg, kdf.HmacKey))
+	key := pbkdf2.Key(pass, kdf.Salt, int(kdf.Iter), int(kdf.KeyLen), hashMap[kdf.Alg])
 	if !bytes.Equal(kdf.Key, key) {
 		return ErrMismatched
 	}
@@ -82,20 +77,8 @@ func WithSalt(salt []byte) Option { return func(obj *Kdf) { obj.Salt = salt } }
 //IMPORTANT! Do not use with WithSalt
 func WithSaltLen(len int) Option { return func(obj *Kdf) { WithSalt(randomKey(len)) } }
 
-//WithHmacKey sets the key for hmac function
-//IMPORTANT! Do not use with WithHmacKeyLen
-func WithHmacKey(key []byte) Option { return func(obj *Kdf) { obj.HmacKey = key } }
-
-//WithHmacKeyLen sets the length to generate key hmac function
-//IMPORTANT! Do not use with WithHmacKey
-func WithHmacKeyLen(len int) Option { return func(obj *Kdf) { WithHmacKey(randomKey(len)) } }
-
 func randomKey(len int) []byte {
 	key := make([]byte, len)
 	_, _ = io.ReadAtLeast(rand.Reader, key, len)
 	return key
-}
-
-func hf(f Kdf_HashAlg, k []byte) func() hash.Hash {
-	return func() hash.Hash { return hmac.New(hashMap[f], k) }
 }
